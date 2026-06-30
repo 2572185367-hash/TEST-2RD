@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>论文关键词检索</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    :root {
+      --bg: #f0f2f5; --card-bg: #fff; --primary: #4f46e5; --primary-hover: #4338ca;
+      --text: #1f2937; --text-secondary: #6b7280; --border: #e5e7eb;
+      --radius: 12px; --radius-sm: 8px;
+      --cn-color: #3b82f6; --en-color: #10b981; --arxiv-color: #f59e0b;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans SC', sans-serif;
+      background: var(--bg); color: var(--text); line-height: 1.6; -webkit-font-smoothing: antialiased;
+    }
+    .app { max-width: 960px; min-height: 100vh; margin: 0 auto; background: var(--card-bg); display: flex; flex-direction: column; }
+    /* Header */
+    .header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 24px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    .header-left { display: flex; align-items: center; gap: 12px; }
+    .header-left h1 { font-size: 18px; font-weight: 700; }
+    .logo-icon { font-size: 24px; }
+    .header-actions { display: flex; gap: 8px; }
+    .btn {
+      display: flex; align-items: center; gap: 6px; padding: 8px 16px;
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      background: var(--card-bg); color: var(--text-secondary); font-size: 13px;
+      cursor: pointer; transition: all 0.2s; font-family: inherit;
+    }
+    .btn:hover { background: var(--bg); color: var(--text); }
+    .btn.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .btn.primary:hover { background: var(--primary-hover); }
+    .btn.danger { color: #ef4444; }
+    .btn.danger:hover { background: #fef2f2; border-color: #fecaca; }
+    /* Layout */
+    .body-wrap { display: flex; flex: 1; overflow: hidden; }
+    /* Sidebar */
+    .sidebar {
+      width: 280px; border-right: 1px solid var(--border); display: flex;
+      flex-direction: column; flex-shrink: 0; background: #fafbfc; overflow-y: auto;
+    }
+    .sidebar-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 16px; border-bottom: 1px solid var(--border);
+    }
+    .sidebar-header h2 { font-size: 14px; font-weight: 600; }
+    .sidebar-count { font-size: 12px; color: var(--text-secondary); }
+    .history-list { flex: 1; overflow-y: auto; padding: 8px; }
+    .history-list::-webkit-scrollbar { width: 4px; }
+    .history-list::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 2px; }
+    .empty-hint { text-align: center; padding: 40px 16px; color: var(--text-secondary); font-size: 13px; }
+    .history-item {
+      display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+      border-radius: var(--radius-sm); cursor: pointer; transition: all 0.15s;
+      border: 1px solid transparent;
+    }
+    .history-item:hover { background: #f1f5f9; border-color: var(--border); }
+    .history-item.active { background: #eef2ff; border-color: #c7d2fe; }
+    .history-item-content { flex: 1; min-width: 0; }
+    .history-item-title {
+      font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden;
+      text-overflow: ellipsis; margin-bottom: 2px;
+    }
+    .history-item-time { font-size: 11px; color: var(--text-secondary); }
+    .history-delete-btn {
+      width: 26px; height: 26px; border-radius: 50%; border: none;
+      background: transparent; color: #9ca3af; cursor: pointer; font-size: 16px;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s; flex-shrink: 0;
+    }
+    .history-delete-btn:hover { background: #fee2e2; color: #ef4444; }
+    /* Main */
+    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .messages { flex: 1; overflow-y: auto; padding: 20px 24px; }
+    .messages::-webkit-scrollbar { width: 5px; }
+    .messages::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+    /* Welcome */
+    .welcome { text-align: center; padding: 60px 20px; }
+    .welcome-icon { font-size: 56px; margin-bottom: 16px; }
+    .welcome h2 { font-size: 20px; margin-bottom: 8px; }
+    .welcome p { font-size: 14px; color: var(--text-secondary); margin-bottom: 24px; }
+    .suggestions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+    .suggestion-tag {
+      padding: 6px 14px; border: 1px solid var(--border); border-radius: 20px;
+      background: #fff; font-size: 13px; cursor: pointer; transition: all 0.15s;
+      font-family: inherit; color: var(--text);
+    }
+    .suggestion-tag:hover { border-color: var(--primary); color: var(--primary); background: #eef2ff; }
+    /* Message */
+    .message { margin-bottom: 20px; animation: fadeIn 0.3s ease; }
+    .message.user { display: flex; justify-content: flex-end; }
+    .message.user .msg-bubble { background: var(--primary); color: #fff; max-width: 70%; padding: 10px 16px; border-radius: var(--radius); border-top-right-radius: 4px; font-size: 14px; }
+    .msg-time { font-size: 11px; color: var(--text-secondary); margin-top: 4px; text-align: right; }
+    .message.assistant .msg-time { text-align: left; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    /* Result card */
+    .result-card { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    .result-section { padding: 16px 20px; border-bottom: 1px solid var(--border); }
+    .result-section:last-child { border-bottom: none; }
+    .result-section h3 { font-size: 14px; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+    .keyword-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+    .keyword-tag {
+      padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 500;
+    }
+    .keyword-tag.cn { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+    .keyword-tag.en { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
+    .no-result { color: var(--text-secondary); font-size: 13px; font-style: italic; }
+    .arxiv-list { display: flex; flex-direction: column; gap: 8px; }
+    .arxiv-item {
+      padding: 10px 14px; background: #fffbeb; border: 1px solid #fde68a;
+      border-radius: var(--radius-sm); font-size: 13px; color: #92400e;
+    }
+    .arxiv-item a { color: #92400e; font-weight: 500; }
+    /* Stats */
+    .result-stats { display: flex; gap: 16px; padding: 10px 20px; background: #f9fafb; font-size: 12px; color: var(--text-secondary); }
+    .result-stats span { display: flex; align-items: center; gap: 4px; }
+    /* Loading */
+    .loading-msg { display: flex; align-items: center; gap: 10px; padding: 16px 20px; color: var(--text-secondary); font-size: 14px; }
+    .typing { display: flex; gap: 4px; }
+    .typing span { width: 7px; height: 7px; border-radius: 50%; background: #9ca3af; animation: bounce 1.4s infinite; }
+    .typing span:nth-child(2) { animation-delay: 0.2s; }
+    .typing span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes bounce { 0%,60%,100% { opacity: 0.3; transform: scale(0.8); } 30% { opacity: 1; transform: scale(1); } }
+    /* Error */
+    .error-banner {
+      margin: 0 24px 14px; padding: 10px 16px; background: #fef2f2;
+      border: 1px solid #fecaca; border-radius: var(--radius-sm); color: #dc2626;
+      font-size: 13px; display: flex; align-items: center; justify-content: space-between;
+    }
+    .error-banner button { background: none; border: none; color: #dc2626; cursor: pointer; font-size: 18px; }
+    /* Input */
+    .input-area { padding: 14px 24px; border-top: 1px solid var(--border); flex-shrink: 0; }
+    .input-row { display: flex; gap: 8px; }
+    .input-field {
+      flex: 1; padding: 10px 16px; border: 1px solid var(--border);
+      border-radius: var(--radius); font-size: 14px; outline: none; font-family: inherit;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .input-field:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79,70,229,0.1); }
+    .input-field:disabled { background: #f9fafb; }
+    .send-btn {
+      width: 44px; height: 44px; border-radius: var(--radius); border: none;
+      background: var(--primary); color: #fff; cursor: pointer; font-size: 18px;
+      transition: all 0.2s; flex-shrink: 0;
+    }
+    .send-btn:hover:not(:disabled) { background: var(--primary-hover); transform: scale(1.05); }
+    .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .input-hint { font-size: 11px; color: var(--text-secondary); margin-top: 6px; text-align: center; }
+    /* Toast */
+    .toast {
+      position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+      padding: 10px 24px; border-radius: var(--radius-sm); font-size: 13px; z-index: 1000;
+      animation: slideUp 0.3s ease; background: #1f2937; color: #fff; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .toast.success { background: #059669; }
+    @keyframes slideUp { from { opacity: 0; transform: translateX(-50%) translateY(10px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+    /* Responsive */
+    @media (max-width: 700px) {
+      .sidebar { position: fixed; left: -280px; top: 0; bottom: 0; z-index: 100; transition: left 0.25s; }
+      .sidebar.open { left: 0; box-shadow: 4px 0 12px rgba(0,0,0,0.1); }
+      .body-wrap { position: relative; }
+      .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 99; }
+      .overlay.show { display: block; }
+      .header { padding: 12px 16px; }
+      .messages { padding: 14px 16px; }
+      .input-area { padding: 10px 16px; }
+      .message.user .msg-bubble { max-width: 85%; }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback, createElement, Fragment } = React;
+    const { createRoot } = ReactDOM;
+
+    // ===== 配置 =====
+    const BACKEND_URL = 'http://localhost:3001';
+    const STORAGE_KEY = 'paper_search_history_v2';
+
+    // ===== localStorage 历史管理（完整 CRUD） =====
+    function loadLocalHistory() {
+      try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
+      catch { return []; }
+    }
+    function saveLocalHistory(items) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    }
+    function addLocalItem(item) {
+      const items = loadLocalHistory();
+      items.unshift(item);
+      if (items.length > 50) items.length = 50;
+      saveLocalHistory(items);
+    }
+    function deleteLocalItem(id) {
+      const items = loadLocalHistory().filter(item => item.id !== id);
+      saveLocalHistory(items);
+    }
+
+    // ===== 关键词解析 =====
+    function parseKeywords(text) {
+      if (!text) return { cnKeywords: [], enKeywords: [] };
+      const lines = text.split('\n').filter(Boolean);
+      let cnKeywords = [], enKeywords = [], section = '';
+      lines.forEach(line => {
+        if (line.includes('中文扩增关键词') || line.includes('中文')) section = 'cn';
+        else if (line.includes('英文检索关键词') || line.includes('英文')) section = 'en';
+        else if (line.trim()) {
+          if (section === 'cn') cnKeywords.push(line.trim());
+          else if (section === 'en') enKeywords.push(line.trim());
+        }
+      });
+      return { cnKeywords, enKeywords };
+    }
+
+    // ===== API 请求 =====
+    async function callWorkflow(query) {
+      const res = await fetch(`${BACKEND_URL}/api/workflows/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, user: 'paper-search-user' }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || '请求失败');
+      return data;
+    }
+
+    // ===== Toast 组件 =====
+    function Toast({ msg, type, onHide }) {
+      useEffect(() => { const t = setTimeout(onHide, 2000); return () => clearTimeout(t); }, []);
+      return <div className={`toast ${type || ''}`}>{msg}</div>;
+    }
+
+    // ===== 主应用 =====
+    function App() {
+      const [history, setHistory] = useState([]);
+      const [activeId, setActiveId] = useState(null);
+      const [messages, setMessages] = useState([]);
+      const [query, setQuery] = useState('');
+      const [loading, setLoading] = useState(false);
+      const [error, setError] = useState('');
+      const [sidebarOpen, setSidebarOpen] = useState(false);
+      const [toast, setToast] = useState(null);
+
+      const inputRef = useRef(null);
+      const messagesEndRef = useRef(null);
+
+      // 加载本地历史
+      useEffect(() => { setHistory(loadLocalHistory()); }, []);
+      useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, loading]);
+
+      // 发送检索
+      const handleSend = async (e) => {
+        e?.preventDefault();
+        const q = query.trim();
+        if (!q || loading) return;
+
+        const now = Date.now();
+        const userMsg = { id: now, role: 'user', content: q, time: new Date().toLocaleString('zh-CN') };
+        setMessages(prev => [...prev, userMsg]);
+        setQuery('');
+        setLoading(true);
+        setError('');
+
+        try {
+          const data = await callWorkflow(q);
+          if (data.success && data.data?.status === 'succeeded') {
+            const outputs = data.data.outputs || {};
+            const { cnKeywords, enKeywords } = parseKeywords(outputs.text || '');
+            const arxivResults = Array.isArray(outputs.output) ? outputs.output : [];
+
+            const assistantMsg = {
+              id: data.workflow_run_id || (now + 1),
+              role: 'assistant',
+              cnKeywords, enKeywords, arxivResults,
+              stats: { elapsed_time: data.data.elapsed_time, total_tokens: data.data.total_tokens, total_steps: data.data.total_steps },
+              time: new Date().toLocaleString('zh-CN'),
+            };
+            setMessages(prev => [...prev, assistantMsg]);
+
+            // 存到本地历史
+            const historyItem = { id: assistantMsg.id, query: q, cnKeywords, enKeywords, arxivResults, stats: assistantMsg.stats, time: assistantMsg.time, timestamp: now };
+            addLocalItem(historyItem);
+            setHistory(loadLocalHistory());
+            setActiveId(assistantMsg.id);
+          } else {
+            setError('检索失败: ' + (data.data?.error || data.message || '未知错误'));
+          }
+        } catch (err) {
+          setError('请求失败: ' + err.message + ' | 确保后端已启动: node server.js');
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      // 加载历史项到消息列
+      const loadHistoryItem = (item) => {
+        setMessages([
+          { id: item.id + '-u', role: 'user', content: item.query, time: item.time },
+          { id: item.id, role: 'assistant', cnKeywords: item.cnKeywords, enKeywords: item.enKeywords, arxivResults: item.arxivResults, stats: item.stats, time: item.time },
+        ]);
+        setActiveId(item.id);
+        setSidebarOpen(false);
+      };
+
+      // 删除历史项
+      const deleteHistoryItem = (e, id) => {
+        e.stopPropagation();
+        deleteLocalItem(id);
+        setHistory(loadLocalHistory());
+        if (activeId === id) {
+          setMessages([]);
+          setActiveId(null);
+        }
+        setToast({ msg: '已删除', type: 'success' });
+      };
+
+      // 清空全部历史
+      const clearAllHistory = () => {
+        if (!window.confirm('确定清空全部检索历史？')) return;
+        saveLocalHistory([]);
+        setHistory([]);
+        setMessages([]);
+        setActiveId(null);
+        setToast({ msg: '已清空全部历史', type: 'success' });
+      };
+
+      // 新建检索
+      const handleNew = () => { setMessages([]); setActiveId(null); setError(''); setQuery(''); inputRef.current?.focus(); };
+
+      const handleKeyDown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } };
+
+      const suggestionClick = (text) => { setQuery(text); inputRef.current?.focus(); };
+
+      return (
+        <div className="app">
+          {/* === Header === */}
+          <header className="header">
+            <div className="header-left">
+              <span className="logo-icon">📄</span>
+              <h1>论文关键词检索</h1>
+            </div>
+            <div className="header-actions">
+              <button className="btn" onClick={() => setSidebarOpen(!sidebarOpen)}>☰ 历史 ({history.length})</button>
+              <button className="btn" onClick={handleNew}>+ 新检索</button>
+            </div>
+          </header>
+
+          <div className="body-wrap">
+            {/* === 移动端遮罩 === */}
+            <div className={`overlay ${sidebarOpen ? 'show' : ''}`} onClick={() => setSidebarOpen(false)}></div>
+
+            {/* === 侧边栏 - 历史 === */}
+            <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
+              <div className="sidebar-header">
+                <h2>📋 检索历史</h2>
+                <span className="sidebar-count">{history.length} 条</span>
+              </div>
+              {history.length > 0 && (
+                <div style={{ padding: '4px 8px' }}>
+                  <button className="btn danger" style={{ width: '100%', justifyContent: 'center', fontSize: '12px', padding: '6px' }} onClick={clearAllHistory}>
+                    🗑 清空全部历史
+                  </button>
+                </div>
+              )}
+              <div className="history-list">
+                {history.length === 0 ? (
+                  <div className="empty-hint">暂无检索记录<br/>输入关键词开始检索吧</div>
+                ) : (
+                  history.map(item => (
+                    <div key={item.id} className={`history-item ${activeId === item.id ? 'active' : ''}`} onClick={() => loadHistoryItem(item)}>
+                      <div className="history-item-content">
+                        <div className="history-item-title">{item.query}</div>
+                        <div className="history-item-time">{item.time}</div>
+                      </div>
+                      <button className="history-delete-btn" onClick={(e) => deleteHistoryItem(e, item.id)} title="删除此条">×</button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </aside>
+
+            {/* === 主内容区 === */}
+            <main className="main">
+              <div className="messages">
+                {messages.length === 0 && !loading ? (
+                  <div className="welcome">
+                    <div className="welcome-icon">🔍</div>
+                    <h2>论文关键词智能检索</h2>
+                    <p>输入研究方向，AI 自动扩展中英文关键词并检索 Arxiv 论文</p>
+                    <div className="suggestions">
+                      <button className="suggestion-tag" onClick={() => suggestionClick('人工智能在医学影像中的应用')}>人工智能在医学影像中的应用</button>
+                      <button className="suggestion-tag" onClick={() => suggestionClick('神经网络与深度学习最新进展')}>神经网络与深度学习最新进展</button>
+                      <button className="suggestion-tag" onClick={() => suggestionClick('自然语言处理中的注意力机制')}>自然语言处理中的注意力机制</button>
+                      <button className="suggestion-tag" onClick={() => suggestionClick('计算机视觉目标检测算法综述')}>计算机视觉目标检测算法综述</button>
+                    </div>
+                  </div>
+                ) : (
+                  messages.map(msg => (
+                    <div key={msg.id} className={`message ${msg.role}`}>
+                      {msg.role === 'user' ? (
+                        <div>
+                          <div className="msg-bubble">{msg.content}</div>
+                          <div className="msg-time">{msg.time}</div>
+                        </div>
+                      ) : (
+                        <div className="result-card">
+                          <div className="result-section">
+                            <h3>🔤 中文扩展关键词</h3>
+                            <div className="keyword-tags">
+                              {msg.cnKeywords?.length > 0 ? msg.cnKeywords.map((kw, i) => (
+                                <span key={i} className="keyword-tag cn">{kw}</span>
+                              )) : <span className="no-result">暂无</span>}
+                            </div>
+                          </div>
+                          <div className="result-section">
+                            <h3>🌐 英文检索关键词</h3>
+                            <div className="keyword-tags">
+                              {msg.enKeywords?.length > 0 ? msg.enKeywords.map((kw, i) => (
+                                <span key={i} className="keyword-tag en">{kw}</span>
+                              )) : <span className="no-result">暂无</span>}
+                            </div>
+                          </div>
+                          <div className="result-section">
+                            <h3>📚 Arxiv 检索结果</h3>
+                            {msg.arxivResults?.length > 0 ? (
+                              <div className="arxiv-list">
+                                {msg.arxivResults.map((item, i) => (
+                                  <div key={i} className="arxiv-item">{item}</div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="no-result">未找到相关 Arxiv 论文</p>
+                            )}
+                          </div>
+                          {msg.stats && (
+                            <div className="result-stats">
+                              <span>⏱ {(msg.stats.elapsed_time || 0).toFixed(1)}s</span>
+                              <span>🔢 {msg.stats.total_tokens || 0} tokens</span>
+                              <span>📋 {msg.stats.total_steps || 0} 步骤</span>
+                            </div>
+                          )}
+                          <div className="msg-time" style={{ padding: '4px 20px 10px' }}>{msg.time}</div>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+                {loading && (
+                  <div className="loading-msg">
+                    <div className="typing"><span></span><span></span><span></span></div>
+                    <span>正在扩展关键词并检索论文...</span>
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+
+              {error && (
+                <div className="error-banner">
+                  <span>⚠ {error}</span>
+                  <button onClick={() => setError('')}>×</button>
+                </div>
+              )}
+
+              <div className="input-area">
+                <div className="input-row">
+                  <input ref={inputRef} className="input-field" type="text"
+                    value={query} onChange={e => setQuery(e.target.value)}
+                    onKeyDown={handleKeyDown} placeholder="输入论文关键词或研究方向... (Enter 检索)"
+                    disabled={loading} autoComplete="off" />
+                  <button className="send-btn" onClick={handleSend} disabled={loading || !query.trim()}>
+                    {loading ? '⏳' : '→'}
+                  </button>
+                </div>
+                <p className="input-hint">支持中英文 · Enter 发送 · 基于 Dify AI Workflow</p>
+              </div>
+            </main>
+          </div>
+
+          {toast && <Toast msg={toast.msg} type={toast.type} onHide={() => setToast(null)} />}
+        </div>
+      );
+    }
+
+    createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
