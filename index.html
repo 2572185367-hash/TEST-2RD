@@ -184,7 +184,8 @@
     const { createRoot } = ReactDOM;
 
     // ===== 配置 =====
-    const BACKEND_URL = 'http://localhost:3001';
+    // 自动适配：服务器部署用同源，本地双击用 localhost:3001
+    const BACKEND_URL = window.location.protocol === 'file:' ? 'http://localhost:3001' : window.location.origin;
     const STORAGE_KEY = 'paper_search_history_v2';
 
     // ===== localStorage 历史管理（完整 CRUD） =====

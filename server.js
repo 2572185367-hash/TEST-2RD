@@ -2,10 +2,9 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const https = require('https');
-const http = require('http');
 
 const app = express();
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 
 const DIFY_BASE_URL = 'api.dify.ai';
 const DIFY_API_KEY = 'app-a1BvkLuB1dThIuHdzyq1u7B3';
@@ -146,17 +145,17 @@ app.get('/api/parameters', async (req, res) => {
   }
 });
 
-// ========== 静态文件服务 ==========
-app.use(express.static(path.join(__dirname, 'client', 'dist')));
+// ========== 静态文件服务（生产：直接托管独立 index.html） ==========
+app.use(express.static(__dirname));
 
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'client', 'dist', 'index.html'));
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`\n========================================`);
   console.log(`  论文关键词检索服务已启动`);
-  console.log(`  地址: http://localhost:${PORT}`);
-  console.log(`  API:  http://localhost:${PORT}/api/workflows/run`);
+  console.log(`  地址: http://0.0.0.0:${PORT}`);
+  console.log(`  API:  http://0.0.0.0:${PORT}/api/workflows/run`);
   console.log(`========================================\n`);
 });
